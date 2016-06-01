@@ -10,31 +10,27 @@ import datetime
 import json
 import sys
 import pika
+import os
+
+
+def time_tostring():
+    ts = time.time();
+    return datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d--%H_%M_%S');
 
 
 def print_time(step):
-    ts = time.time();
-    st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S');
-    print st + " - " + step
+    print time_tostring() + " - " + step
 
 
 def drain_messages(consume_channel, q, file):
     method_frame, header_frame, body = consume_channel.basic_get(q)
     if method_frame:
-        print method_frame, header_frame, body
         file.write(str(header_frame) + "\n")
         file.write(body + "\n")
-        print header_frame
         drain_messages(consume_channel, q, file)
         #     # channel.basic_ack(method_frame.delivery_tag)
         # else:
         #     print 'No message returned'
-
-
-def on_message(ch, method, properties, body):
-    msg = "%s - %s - %s   - %s" % (
-        str(method.exchange), str(method.routing_key), body, properties.headers)
-    print_time(msg)
 
 
 def get_auth(user, password):
@@ -63,9 +59,12 @@ if __name__ == '__main__':
     connection = pika.BlockingConnection(
             pika.ConnectionParameters(host, 5672, "/", credentials))
     channel = connection.channel()
+    dump_dir = "dump_time_" + time_tostring()
+    if not os.path.exists(dump_dir):
+        os.makedirs(dump_dir)
     for queue in queues:
-        print queue['name']
-        file = open("dump/" + queue['name'], 'w+')
+        print_time("Dump queue:" + queue['name'])
+        file = open(dump_dir + "/" + queue['name'], 'w+')
         drain_messages(channel, queue['name'], file)
         file.flush()
         file.close()
