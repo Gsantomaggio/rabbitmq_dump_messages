@@ -1,5 +1,5 @@
-# script to remove exchanges and queues for virtual host
-# python remove_queue_exchanges.py 192.168.1.94 %2f test test
+# script to dump all rabbitmq messages
+# python recover.py 192.168.1.94 %2f test test
 # !/usr/bin/python
 __author__ = 'gabriele'
 
