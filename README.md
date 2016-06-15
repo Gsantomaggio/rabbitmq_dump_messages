@@ -7,7 +7,7 @@ Requirements:
 pip install pika
 ```
 
-How to use it:
+How to use:
 
 ```
 python recover.py localhost  %2f guest guest
