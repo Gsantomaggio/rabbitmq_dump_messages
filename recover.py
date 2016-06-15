@@ -22,11 +22,15 @@ def print_time(step):
     print time_tostring() + " - " + step
 
 
+def write_message_to_file(file, header_frame, body):
+        file.write(str(header_frame) + "\n")
+        file.write(body + "\n")
+    
+
 def drain_messages(consume_channel, q, file):
     method_frame, header_frame, body = consume_channel.basic_get(q)
     if method_frame:
-        file.write(str(header_frame) + "\n")
-        file.write(body + "\n")
+        write_message_to_file(file, header_frame, body)
         drain_messages(consume_channel, q, file)
         #     # channel.basic_ack(method_frame.delivery_tag)
         # else:
@@ -53,16 +57,26 @@ if __name__ == '__main__':
     vhost = sys.argv[2]
     user = sys.argv[3]
     password = sys.argv[4]
-    queues = call_api(host, vhost, user, password, "queues")
 
-    credentials = pika.PlainCredentials(user, password)
-    connection = pika.BlockingConnection(
-            pika.ConnectionParameters(host, 5672, "/", credentials))
-    channel = connection.channel()
+    virtual_hosts = call_api(host, vhost, user, password, "vhosts")
+    for virtual_host in virtual_hosts:
+        print virtual_host['name']
+        
+    queues = call_api(host, vhost, user, password, "queues")
+    for queue in queues:
+        print queue['name'] + " - " + queue['vhost']
+ 
     dump_dir = "dump_time_" + time_tostring()
     if not os.path.exists(dump_dir):
         os.makedirs(dump_dir)
+
     for queue in queues:
+        print_time(queue['name'] + " - " + queue['vhost'])
+        
+        credentials = pika.PlainCredentials(user, password)
+        connection = pika.BlockingConnection(
+                pika.ConnectionParameters(host, 5672, queue['vhost'], credentials))
+        channel = connection.channel()
         print_time("Dump queue:" + queue['name'])
         file = open(dump_dir + "/" + queue['name'], 'w+')
         drain_messages(channel, queue['name'], file)
