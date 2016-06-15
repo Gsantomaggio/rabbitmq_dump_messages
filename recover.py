@@ -93,4 +93,4 @@ if __name__ == '__main__':
 
 
     connection.add_timeout(0, kill)
-    print "Goodbye"
+    print "Goodbye!"
