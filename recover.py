@@ -11,6 +11,8 @@ import json
 import sys
 import pika
 import os
+import sqlite3
+   
 
 
 def time_tostring():
@@ -22,20 +24,16 @@ def print_time(step):
     print time_tostring() + " - " + step
 
 
-def write_message_to_file(file, header_frame, body):
-        file.write(str(header_frame) + "\n")
-        file.write(body + "\n")
+def write_message_to_file(conn, queue, method_frame,  header_frame, body):
+    conn.execute('insert into dump values (?,?,?,?,?)', [method_frame.delivery_tag,str(header_frame.headers),header_frame.delivery_mode,body,queue])
+    conn.commit()
     
 
-def drain_messages(consume_channel, q, file):
+def drain_messages(consume_channel, q, conn):
     method_frame, header_frame, body = consume_channel.basic_get(q)
-    if method_frame:
-        write_message_to_file(file, header_frame, body)
-        drain_messages(consume_channel, q, file)
-        #     # channel.basic_ack(method_frame.delivery_tag)
-        # else:
-        #     print 'No message returned'
-
+    while method_frame:
+        write_message_to_file(conn, q, method_frame, header_frame, body)
+        method_frame, header_frame, body = consume_channel.basic_get(q)
 
 def get_auth(user, password):
     return base64.encodestring('%s:%s' % (user, password)).replace('\n', '')
@@ -51,13 +49,26 @@ def call_api(rabbitmq_host, vhost, user, password, api):
     return items
 
 
+
+def create_sql_tables(conn):
+    print_time("Opened database successfully");
+    conn.execute('''CREATE TABLE dump
+       (DELIVERYTAG INT PRIMARY KEY     NOT NULL,
+       HEADER          TEXT    NULL,
+       DELIVERY_MODE   INT NULL,
+       BODY            BLOB     NULL,
+
+       QUEUE         TEXT);''')
+    print_time("Table created successfully");
+
+
 if __name__ == '__main__':
     print 'Argument List:', str(sys.argv)
     host = sys.argv[1]
     vhost = sys.argv[2]
     user = sys.argv[3]
     password = sys.argv[4]
-
+   
     virtual_hosts = call_api(host, vhost, user, password, "vhosts")
     for virtual_host in virtual_hosts:
         print virtual_host['name']
@@ -66,9 +77,9 @@ if __name__ == '__main__':
     for queue in queues:
         print queue['name'] + " - " + queue['vhost']
  
-    dump_dir = "dump_time_" + time_tostring()
-    if not os.path.exists(dump_dir):
-        os.makedirs(dump_dir)
+    #dump_dir = "dump_time_" + time_tostring()
+    #if not os.path.exists(dump_dir):
+        #os.makedirs(dump_dir)
 
     for queue in queues:
         print_time(queue['name'] + " - " + queue['vhost'])
@@ -77,12 +88,13 @@ if __name__ == '__main__':
         connection = pika.BlockingConnection(
                 pika.ConnectionParameters(host, 5672, queue['vhost'], credentials))
         channel = connection.channel()
-        print_time("Dump queue:" + queue['name'])
-        file = open(dump_dir + "/" + queue['name'], 'w+')
-        drain_messages(channel, queue['name'], file)
-        file.flush()
-        file.close()
-
+        #print_time("Dump queue:" + queue['name'])
+        #file = open(dump_dir + "/" + queue['name'], 'w+')
+        conn = sqlite3.connect('dump_'+ queue['name'] + '.db')
+        create_sql_tables(conn)
+        drain_messages(channel, queue['name'], conn)
+        conn.close()
+  
     call_api(host, vhost, user, password, "connections")
 
     raw_input("key to stop")
